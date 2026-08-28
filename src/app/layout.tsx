@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { AppDataProvider } from "@/lib/AppDataContext";
-import Sidebar from "@/components/Sidebar";
-import Topbar from "@/components/Topbar";
+import AppShell from "@/components/AppShell";
 
 const display = Playfair_Display({
   variable: "--font-display",
@@ -29,11 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex font-sans">
         <AppDataProvider>
-          <Sidebar />
-          <div className="flex-1 min-w-0 flex flex-col">
-            <Topbar />
-            <main className="flex-1 min-w-0 px-8 py-7">{children}</main>
-          </div>
+          <AppShell>{children}</AppShell>
         </AppDataProvider>
       </body>
     </html>
