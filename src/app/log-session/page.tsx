@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "@/lib/AppDataContext";
 import { GRADES, SUBJECTS, SUBJ_LABEL, GRADE_COLOR } from "@/lib/constants";
 import { toISO } from "@/lib/calculations";
@@ -23,6 +23,18 @@ export default function LogSessionPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [recentOpen, setRecentOpen] = useState(false);
+
+  const REMEMBER_KEY = "iep-log-session-staff";
+
+  useEffect(() => {
+    const saved = localStorage.getItem(REMEMBER_KEY);
+    if (saved && staff.some(s => s.name === saved)) setStaffName(saved);
+  }, [staff]);
+
+  function handleStaffChange(name: string) {
+    setStaffName(name);
+    if (name !== "select") localStorage.setItem(REMEMBER_KEY, name);
+  }
 
   const gradeStudents = useMemo(
     () => (grade === "select" ? [] : students.filter(s => s.grade === grade)),
@@ -111,7 +123,7 @@ export default function LogSessionPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Staff">
-              <select value={staffName} onChange={e => setStaffName(e.target.value)} className="input">
+              <select value={staffName} onChange={e => handleStaffChange(e.target.value)} className="input">
                 <option value="select">select</option>
                 {staff.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
               </select>
