@@ -212,7 +212,7 @@ export default function StudentCard({ student, activeSubject, staff, logs, viewS
           {(() => {
             const notes = logs
               .filter(l => l.studentId === student.id && l.subject === displaySubject && l.note.trim() !== "")
-              .sort((a, b) => (a.date < b.date ? 1 : -1));
+              .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.id - a.id));
             if (notes.length === 0) return <p className="text-[10px] text-[var(--text-faint)]">No notes for {displaySubject}</p>;
             return notes.map(n => {
               const s = staff.find(x => x.name === n.staff);

@@ -45,7 +45,7 @@ export default function HistoryPage() {
       .filter(r => subject === "All" || r.subject === subject)
       .filter(r => staffFilter === "All" || r.staff === staffFilter)
       .filter(r => student === "All" || r.studentName === student)
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
+      .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.id - b.id));
   }, [logs, students, grade, subject, staffFilter, student]);
 
   const totalMinutes = rows.reduce((a, r) => a + r.minutes, 0);

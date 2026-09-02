@@ -198,7 +198,7 @@ export default function LogSessionPage() {
             {logs.length === 0 ? (
               <p className="text-xs text-[var(--text-faint)]">No sessions logged yet.</p>
             ) : (
-              [...logs].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 10).map(row => {
+              [...logs].sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.id - a.id)).slice(0, 10).map(row => {
                 const stu = students.find(s => s.id === row.studentId);
                 const s = staff.find(x => x.name === row.staff);
                 return (
