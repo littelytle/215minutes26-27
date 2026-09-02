@@ -46,6 +46,8 @@ async function ensureSheet(title: string, headers: string[]): Promise<void> {
 
 // Patches an already-existing sheet (created before this column existed) by
 // appending a header cell for it, without disturbing existing data/columns.
+// Expands the sheet's grid first if needed — writing past the current grid
+// width (e.g. column H on a 7-column-wide sheet) is rejected by the API.
 async function ensureHeaderColumn(title: string, col: string): Promise<void> {
   const sheets = getClient();
   const res = await sheets.spreadsheets.values.get({
@@ -54,6 +56,21 @@ async function ensureHeaderColumn(title: string, col: string): Promise<void> {
   });
   const header = res.data.values?.[0] || [];
   if (header.includes(col)) return;
+
+  const neededCols = header.length + 1;
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const sheet = meta.data.sheets?.find(s => s.properties?.title === title);
+  const sheetId = sheet?.properties?.sheetId;
+  const gridCols = sheet?.properties?.gridProperties?.columnCount ?? 0;
+  if (sheetId !== undefined && sheetId !== null && gridCols < neededCols) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [{ appendDimension: { sheetId, dimension: "COLUMNS", length: neededCols - gridCols } }],
+      },
+    });
+  }
+
   const colLetter = String.fromCharCode("A".charCodeAt(0) + header.length);
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
