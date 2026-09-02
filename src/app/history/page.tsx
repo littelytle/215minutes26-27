@@ -22,6 +22,13 @@ export default function HistoryPage() {
   const [batchDraft, setBatchDraft] = useState<{ subject: Subject; minutes: number } | null>(null);
   const [confirmDeleteBatch, setConfirmDeleteBatch] = useState<string | null>(null);
 
+  // Row deletes/edits look up their sheet position fresh on each call. Firing
+  // two of these at once (e.g. double-clicking Confirm on two different rows
+  // before the first finishes) can race and corrupt a different row than
+  // intended, since positions shift as rows above them are removed. This lock
+  // makes every edit/delete action here strictly one-at-a-time.
+  const [busy, setBusy] = useState(false);
+
   const batchCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const l of logs) if (l.batchId) counts[l.batchId] = (counts[l.batchId] || 0) + 1;
@@ -53,15 +60,26 @@ export default function HistoryPage() {
   }
 
   async function saveEdit(id: number) {
-    if (!editDraft) return;
-    await updateLog(id, editDraft);
-    setEditingId(null);
-    setEditDraft(null);
+    if (!editDraft || busy) return;
+    setBusy(true);
+    try {
+      await updateLog(id, editDraft);
+      setEditingId(null);
+      setEditDraft(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmDelete(id: number) {
-    await deleteLog(id);
-    setConfirmDeleteId(null);
+    if (busy) return;
+    setBusy(true);
+    try {
+      await deleteLog(id);
+      setConfirmDeleteId(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function startBatchEdit(row: LogEntry) {
@@ -73,15 +91,26 @@ export default function HistoryPage() {
   }
 
   async function saveBatchEdit(batchId: string) {
-    if (!batchDraft) return;
-    await updateLogsBatch(batchId, batchDraft);
-    setEditingBatch(null);
-    setBatchDraft(null);
+    if (!batchDraft || busy) return;
+    setBusy(true);
+    try {
+      await updateLogsBatch(batchId, batchDraft);
+      setEditingBatch(null);
+      setBatchDraft(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmBatchDelete(batchId: string) {
-    await deleteLogsBatch(batchId);
-    setConfirmDeleteBatch(null);
+    if (busy) return;
+    setBusy(true);
+    try {
+      await deleteLogsBatch(batchId);
+      setConfirmDeleteBatch(null);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -137,24 +166,24 @@ export default function HistoryPage() {
                     <td className="px-4 py-2.5 text-[var(--text-faint)] max-w-[16rem]">{r.note || "—"}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button onClick={() => startEdit(r)} title="Edit this entry"
-                          className="text-[var(--text-muted)] hover:text-[var(--accent-blue)] transition-colors">
+                        <button onClick={() => startEdit(r)} title="Edit this entry" disabled={busy}
+                          className="text-[var(--text-muted)] hover:text-[var(--accent-blue)] transition-colors disabled:opacity-40">
                           <Pencil size={15} />
                         </button>
                         {confirmDeleteId === r.id ? (
                           <span className="flex items-center gap-1">
-                            <button onClick={() => confirmDelete(r.id)} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1">Confirm</button>
-                            <button onClick={() => setConfirmDeleteId(null)} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1">Cancel</button>
+                            <button onClick={() => confirmDelete(r.id)} disabled={busy} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1 disabled:opacity-40">Confirm</button>
+                            <button onClick={() => setConfirmDeleteId(null)} disabled={busy} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1 disabled:opacity-40">Cancel</button>
                           </span>
                         ) : (
-                          <button onClick={() => setConfirmDeleteId(r.id)} title="Delete this entry"
-                            className="text-[var(--text-muted)] hover:text-red-300 transition-colors">
+                          <button onClick={() => setConfirmDeleteId(r.id)} title="Delete this entry" disabled={busy}
+                            className="text-[var(--text-muted)] hover:text-red-300 transition-colors disabled:opacity-40">
                             <Trash2 size={15} />
                           </button>
                         )}
                         {groupSize > 1 && (
-                          <button onClick={() => startBatchEdit(r)} title={`Edit all ${groupSize} entries logged together`}
-                            className="flex items-center gap-1 text-[10px] rounded-full border border-[var(--card-border)] px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] whitespace-nowrap">
+                          <button onClick={() => startBatchEdit(r)} title={`Edit all ${groupSize} entries logged together`} disabled={busy}
+                            className="flex items-center gap-1 text-[10px] rounded-full border border-[var(--card-border)] px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] whitespace-nowrap disabled:opacity-40">
                             <Users size={11} /> Group of {groupSize}
                           </button>
                         )}
@@ -183,8 +212,8 @@ export default function HistoryPage() {
                             <input type="text" value={editDraft.note}
                               onChange={e => setEditDraft(d => d && { ...d, note: e.target.value })} className="input w-56" />
                           </MiniField>
-                          <button onClick={() => saveEdit(r.id)} className="btn-primary px-4 py-2 text-sm">Save</button>
-                          <button onClick={() => { setEditingId(null); setEditDraft(null); }} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+                          <button onClick={() => saveEdit(r.id)} disabled={busy} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
+                          <button onClick={() => { setEditingId(null); setEditDraft(null); }} disabled={busy} className="btn-secondary px-4 py-2 text-sm disabled:opacity-40">Cancel</button>
                         </div>
                       </td>
                     </tr>
@@ -206,17 +235,17 @@ export default function HistoryPage() {
                             <input type="number" min={0} value={batchDraft.minutes}
                               onChange={e => setBatchDraft(d => d && { ...d, minutes: Number(e.target.value) })} className="input w-24" />
                           </MiniField>
-                          <button onClick={() => saveBatchEdit(r.batchId)} className="btn-primary px-4 py-2 text-sm">Save All {groupSize}</button>
-                          <button onClick={() => { setEditingBatch(null); setBatchDraft(null); }} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+                          <button onClick={() => saveBatchEdit(r.batchId)} disabled={busy} className="btn-primary px-4 py-2 text-sm disabled:opacity-40">{busy ? "Saving…" : `Save All ${groupSize}`}</button>
+                          <button onClick={() => { setEditingBatch(null); setBatchDraft(null); }} disabled={busy} className="btn-secondary px-4 py-2 text-sm disabled:opacity-40">Cancel</button>
                           <span className="grow" />
                           {confirmDeleteBatch === r.batchId ? (
                             <span className="flex items-center gap-1.5">
                               <span className="text-xs text-amber-300/90">Delete all {groupSize}?</span>
-                              <button onClick={() => confirmBatchDelete(r.batchId)} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1.5">Confirm</button>
-                              <button onClick={() => setConfirmDeleteBatch(null)} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1.5">Cancel</button>
+                              <button onClick={() => confirmBatchDelete(r.batchId)} disabled={busy} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1.5 disabled:opacity-40">Confirm</button>
+                              <button onClick={() => setConfirmDeleteBatch(null)} disabled={busy} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1.5 disabled:opacity-40">Cancel</button>
                             </span>
                           ) : (
-                            <button onClick={() => setConfirmDeleteBatch(r.batchId)} className="flex items-center gap-1 text-xs text-red-300/80 hover:text-red-300">
+                            <button onClick={() => setConfirmDeleteBatch(r.batchId)} disabled={busy} className="flex items-center gap-1 text-xs text-red-300/80 hover:text-red-300 disabled:opacity-40">
                               <Trash2 size={13} /> Delete whole group
                             </button>
                           )}
