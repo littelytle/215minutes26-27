@@ -8,6 +8,7 @@ interface AppData {
   students: Student[];
   logs: LogEntry[];
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
   addStudent: (name: string, grade: Grade, goals: Record<Subject, number>) => Promise<void>;
   updateStudent: (id: number, name: string | undefined, goals: Partial<Record<Subject, number>> | undefined) => Promise<void>;
@@ -28,15 +29,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/data", { cache: "no-store" });
-    const data = await res.json();
-    setStaff(data.staff);
-    setStudents(data.students);
-    setLogs(data.logs);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/data", { cache: "no-store" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Server returned ${res.status}`);
+      }
+      const data = await res.json();
+      setStaff(data.staff);
+      setStudents(data.students);
+      setLogs(data.logs);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -118,7 +130,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <Ctx.Provider value={{
-      staff, students, logs, loading, refresh,
+      staff, students, logs, loading, error, refresh,
       addStudent, updateStudent, deleteStudent, addStaffMember, updateStaffNames,
       addLog, updateLog, deleteLog, updateLogsBatch, deleteLogsBatch,
     }}>

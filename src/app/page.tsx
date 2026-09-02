@@ -23,7 +23,7 @@ const DEFAULT_MONTH_IDX = Math.max(
 );
 
 export default function DashboardPage() {
-  const { staff, students, logs, loading } = useAppData();
+  const { staff, students, logs, loading, error, refresh } = useAppData();
   const [monthIdx, setMonthIdx] = useState(DEFAULT_MONTH_IDX === -1 ? 0 : DEFAULT_MONTH_IDX);
   const { year, month } = MONTH_TABS[monthIdx];
 
@@ -56,6 +56,15 @@ export default function DashboardPage() {
   const [activeSubject, setActiveSubject] = useState<Subject>("Math");
 
   const visibleStudents = gradeFilter === "All" ? students : students.filter(s => s.grade === gradeFilter);
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-400/40 bg-red-400/10 text-red-300 px-4 py-3 text-sm space-y-2 max-w-lg">
+        <p className="font-medium">Couldn&apos;t load data: {error}</p>
+        <button onClick={() => refresh()} className="btn-secondary px-3 py-1.5 text-xs">Retry</button>
+      </div>
+    );
+  }
 
   if (loading) {
     return <p className="text-[var(--text-muted)] text-sm">Loading…</p>;
