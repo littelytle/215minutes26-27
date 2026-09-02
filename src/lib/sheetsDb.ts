@@ -2,7 +2,7 @@
 // layout as the original Streamlit app (staff / students / logs sheets),
 // so it can be pointed at the existing production sheet with no migration.
 import { google, sheets_v4 } from "googleapis";
-import type { Staff, Student, LogEntry, Subject, Grade } from "./types";
+import type { Staff, Student, LogEntry, Subject, Grade, LogUpdate } from "./types";
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID as string;
 
@@ -10,7 +10,7 @@ const STAFF_HEADERS = ["id", "name", "color"];
 const STUDENTS_HEADERS = [
   "id", "name", "grade", "active_subject", "goal_math", "goal_english", "goal_task_completion",
 ];
-const LOGS_HEADERS = ["id", "student_id", "subject", "staff", "minutes", "date", "note"];
+const LOGS_HEADERS = ["id", "student_id", "subject", "staff", "minutes", "date", "note", "batch_id"];
 
 let cachedClient: sheets_v4.Sheets | null = null;
 
@@ -42,6 +42,25 @@ async function ensureSheet(title: string, headers: string[]): Promise<void> {
       requestBody: { values: [headers] },
     });
   }
+}
+
+// Patches an already-existing sheet (created before this column existed) by
+// appending a header cell for it, without disturbing existing data/columns.
+async function ensureHeaderColumn(title: string, col: string): Promise<void> {
+  const sheets = getClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${title}!A1:Z1`,
+  });
+  const header = res.data.values?.[0] || [];
+  if (header.includes(col)) return;
+  const colLetter = String.fromCharCode("A".charCodeAt(0) + header.length);
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${title}!${colLetter}1`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[col]] },
+  });
 }
 
 async function readRows(title: string): Promise<Record<string, string>[]> {
@@ -90,6 +109,25 @@ async function findRowIndex(title: string, headers: string[], col: string, value
     if (String(rows[i][colIdx]) === String(value)) return i + 1; // 1-based sheet row
   }
   return null;
+}
+
+// All row indices (1-based, including header) matching a column value, in sheet order.
+async function findAllRowIndices(title: string, headers: string[], col: string, value: string): Promise<number[]> {
+  const sheets = getClient();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${title}!A:Z`,
+  });
+  const rows = res.data.values || [];
+  if (rows.length < 1) return [];
+  const header = rows[0];
+  const colIdx = header.indexOf(col);
+  if (colIdx === -1) return [];
+  const matches: number[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][colIdx]) === String(value)) matches.push(i + 1);
+  }
+  return matches;
 }
 
 async function updateCell(title: string, row: number, colIdx: number, value: string | number): Promise<void> {
@@ -145,6 +183,7 @@ export async function getStudents(): Promise<Student[]> {
 
 export async function getLogs(): Promise<LogEntry[]> {
   await ensureSheet("logs", LOGS_HEADERS);
+  await ensureHeaderColumn("logs", "batch_id");
   const recs = await readRows("logs");
   return recs.map(r => ({
     id: Number(r.id),
@@ -154,6 +193,7 @@ export async function getLogs(): Promise<LogEntry[]> {
     minutes: Number(r.minutes) || 0,
     date: r.date,
     note: r.note || "",
+    batchId: r.batch_id || "",
   }));
 }
 
@@ -217,11 +257,46 @@ export async function updateStaffNames(newNames: Record<string, string>): Promis
 }
 
 export async function addLog(
-  studentId: number, subject: Subject, staffName: string, minutes: number, dateISO: string, note: string
+  studentId: number, subject: Subject, staffName: string, minutes: number, dateISO: string, note: string,
+  batchId: string
 ): Promise<void> {
   await ensureSheet("logs", LOGS_HEADERS);
+  await ensureHeaderColumn("logs", "batch_id");
   const recs = await readRows("logs");
   await appendRow("logs", LOGS_HEADERS, [
-    nextId(recs), studentId, subject, staffName, minutes, dateISO, note,
+    nextId(recs), studentId, subject, staffName, minutes, dateISO, note, batchId,
   ]);
+}
+
+const LOG_UPDATE_COL: Record<keyof LogUpdate, string> = {
+  subject: "subject", staff: "staff", minutes: "minutes", date: "date", note: "note",
+};
+
+export async function updateLog(id: number, updates: LogUpdate): Promise<void> {
+  await ensureHeaderColumn("logs", "batch_id");
+  const row = await findRowIndex("logs", LOGS_HEADERS, "id", String(id));
+  if (!row) return;
+  for (const [key, value] of Object.entries(updates) as [keyof LogUpdate, string | number][]) {
+    await updateCell("logs", row, LOGS_HEADERS.indexOf(LOG_UPDATE_COL[key]), value);
+  }
+}
+
+export async function deleteLog(id: number): Promise<void> {
+  const row = await findRowIndex("logs", LOGS_HEADERS, "id", String(id));
+  if (row) await deleteRow("logs", row);
+}
+
+export async function updateLogsByBatch(batchId: string, updates: LogUpdate): Promise<void> {
+  await ensureHeaderColumn("logs", "batch_id");
+  const rows = await findAllRowIndices("logs", LOGS_HEADERS, "batch_id", batchId);
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(updates) as [keyof LogUpdate, string | number][]) {
+      await updateCell("logs", row, LOGS_HEADERS.indexOf(LOG_UPDATE_COL[key]), value);
+    }
+  }
+}
+
+export async function deleteLogsByBatch(batchId: string): Promise<void> {
+  const rows = await findAllRowIndices("logs", LOGS_HEADERS, "batch_id", batchId);
+  for (const row of rows.sort((a, b) => b - a)) await deleteRow("logs", row);
 }

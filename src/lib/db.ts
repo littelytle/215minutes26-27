@@ -1,7 +1,7 @@
 // In-memory data layer for local development. Same function signatures as
 // lib/sheetsDb.ts (the real Google Sheets–backed version) so swapping between
 // them is a one-line change in lib/data.ts — nothing else needs to change.
-import type { Staff, Student, LogEntry, Subject } from "./types";
+import type { Staff, Student, LogEntry, Subject, LogUpdate } from "./types";
 import { MOCK_STAFF, MOCK_STUDENTS, MOCK_LOGS } from "./mockData";
 
 let staff: Staff[] = MOCK_STAFF.map(s => ({ ...s }));
@@ -68,7 +68,26 @@ export async function updateStaffNames(newNames: Record<string, string>): Promis
 }
 
 export async function addLog(
-  studentId: number, subject: Subject, staffName: string, minutes: number, dateISO: string, note: string
+  studentId: number, subject: Subject, staffName: string, minutes: number, dateISO: string, note: string,
+  batchId: string
 ): Promise<void> {
-  logs.push({ id: nextId(logs), studentId, subject, staff: staffName, minutes, date: dateISO, note });
+  logs.push({ id: nextId(logs), studentId, subject, staff: staffName, minutes, date: dateISO, note, batchId });
+}
+
+export async function updateLog(id: number, updates: LogUpdate): Promise<void> {
+  const l = logs.find(x => x.id === id);
+  if (!l) return;
+  Object.assign(l, updates);
+}
+
+export async function deleteLog(id: number): Promise<void> {
+  logs = logs.filter(l => l.id !== id);
+}
+
+export async function updateLogsByBatch(batchId: string, updates: LogUpdate): Promise<void> {
+  for (const l of logs) if (l.batchId === batchId) Object.assign(l, updates);
+}
+
+export async function deleteLogsByBatch(batchId: string): Promise<void> {
+  logs = logs.filter(l => l.batchId !== batchId);
 }

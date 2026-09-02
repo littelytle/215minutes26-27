@@ -24,4 +24,7 @@ export interface LogEntry {
   minutes: number;
   date: string; // YYYY-MM-DD
   note: string;
+  batchId: string; // groups entries logged together in one Log Session submit; "" for legacy rows
 }
+
+export type LogUpdate = Partial<Pick<LogEntry, "subject" | "staff" | "minutes" | "date" | "note">>;

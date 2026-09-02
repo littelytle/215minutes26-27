@@ -21,7 +21,7 @@ const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
 const twoDaysAgo = new Date(today); twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
 export const MOCK_LOGS: LogEntry[] = [
-  { id: 1, studentId: 1, subject: "Math", staff: "Ms. Rivera", minutes: 60, date: toISO(today), note: "Great focus today" },
-  { id: 2, studentId: 2, subject: "English", staff: "Mr. Thompson", minutes: 90, date: toISO(yesterday), note: "" },
-  { id: 3, studentId: 3, subject: "Task Completion", staff: "Ms. Chen", minutes: 10, date: toISO(twoDaysAgo), note: "" },
+  { id: 1, studentId: 1, subject: "Math", staff: "Ms. Rivera", minutes: 60, date: toISO(today), note: "Great focus today", batchId: "seed-1" },
+  { id: 2, studentId: 2, subject: "English", staff: "Mr. Thompson", minutes: 90, date: toISO(yesterday), note: "", batchId: "seed-2" },
+  { id: 3, studentId: 3, subject: "Task Completion", staff: "Ms. Chen", minutes: 10, date: toISO(twoDaysAgo), note: "", batchId: "seed-2" },
 ];

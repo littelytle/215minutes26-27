@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
-import type { Staff, Student, LogEntry, Subject, Grade } from "./types";
+import type { Staff, Student, LogEntry, Subject, Grade, LogUpdate } from "./types";
 
 interface AppData {
   staff: Staff[];
@@ -14,7 +14,11 @@ interface AppData {
   deleteStudent: (id: number) => Promise<void>;
   addStaffMember: (name: string, color: string) => Promise<void>;
   updateStaffNames: (names: Record<string, string>) => Promise<void>;
-  addLog: (studentId: number, subject: Subject, staff: string, minutes: number, date: string, note: string) => Promise<void>;
+  addLog: (studentId: number, subject: Subject, staff: string, minutes: number, date: string, note: string, batchId: string) => Promise<void>;
+  updateLog: (id: number, updates: LogUpdate) => Promise<void>;
+  deleteLog: (id: number) => Promise<void>;
+  updateLogsBatch: (batchId: string, updates: LogUpdate) => Promise<void>;
+  deleteLogsBatch: (batchId: string) => Promise<void>;
 }
 
 const Ctx = createContext<AppData | null>(null);
@@ -77,19 +81,46 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const addLog = useCallback(async (
-    studentId: number, subject: Subject, staffName: string, minutes: number, date: string, note: string
+    studentId: number, subject: Subject, staffName: string, minutes: number, date: string, note: string, batchId: string
   ) => {
     await fetch("/api/logs", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId, subject, staff: staffName, minutes, date, note }),
+      body: JSON.stringify({ studentId, subject, staff: staffName, minutes, date, note, batchId }),
     });
+    await refresh();
+  }, [refresh]);
+
+  const updateLog = useCallback(async (id: number, updates: LogUpdate) => {
+    await fetch(`/api/logs/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    await refresh();
+  }, [refresh]);
+
+  const deleteLog = useCallback(async (id: number) => {
+    await fetch(`/api/logs/${id}`, { method: "DELETE" });
+    await refresh();
+  }, [refresh]);
+
+  const updateLogsBatch = useCallback(async (batchId: string, updates: LogUpdate) => {
+    await fetch(`/api/logs/batch/${batchId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    await refresh();
+  }, [refresh]);
+
+  const deleteLogsBatch = useCallback(async (batchId: string) => {
+    await fetch(`/api/logs/batch/${batchId}`, { method: "DELETE" });
     await refresh();
   }, [refresh]);
 
   return (
     <Ctx.Provider value={{
       staff, students, logs, loading, refresh,
-      addStudent, updateStudent, deleteStudent, addStaffMember, updateStaffNames, addLog,
+      addStudent, updateStudent, deleteStudent, addStaffMember, updateStaffNames,
+      addLog, updateLog, deleteLog, updateLogsBatch, deleteLogsBatch,
     }}>
       {children}
     </Ctx.Provider>

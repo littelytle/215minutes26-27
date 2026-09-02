@@ -1,16 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useAppData } from "@/lib/AppDataContext";
 import { GRADES, SUBJECTS, SUBJ_LABEL, GRADE_COLOR } from "@/lib/constants";
+import type { LogEntry, Subject } from "@/lib/types";
 import Card from "@/components/ui/Card";
+import { Pencil, Trash2, Users } from "lucide-react";
 
 export default function HistoryPage() {
-  const { staff, students, logs } = useAppData();
+  const { staff, students, logs, updateLog, deleteLog, updateLogsBatch, deleteLogsBatch } = useAppData();
   const [grade, setGrade] = useState("All");
   const [subject, setSubject] = useState("All");
   const [staffFilter, setStaffFilter] = useState("All");
   const [student, setStudent] = useState("All");
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<{ subject: Subject; minutes: number; date: string; note: string } | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const [editingBatch, setEditingBatch] = useState<string | null>(null);
+  const [batchDraft, setBatchDraft] = useState<{ subject: Subject; minutes: number } | null>(null);
+  const [confirmDeleteBatch, setConfirmDeleteBatch] = useState<string | null>(null);
+
+  const batchCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const l of logs) if (l.batchId) counts[l.batchId] = (counts[l.batchId] || 0) + 1;
+    return counts;
+  }, [logs]);
 
   const rows = useMemo(() => {
     return logs
@@ -27,6 +43,46 @@ export default function HistoryPage() {
 
   const totalMinutes = rows.reduce((a, r) => a + r.minutes, 0);
   const studentNames = Array.from(new Set(students.map(s => s.name))).sort();
+
+  function startEdit(row: LogEntry) {
+    setEditingBatch(null);
+    setConfirmDeleteBatch(null);
+    setEditingId(row.id);
+    setConfirmDeleteId(null);
+    setEditDraft({ subject: row.subject, minutes: row.minutes, date: row.date, note: row.note });
+  }
+
+  async function saveEdit(id: number) {
+    if (!editDraft) return;
+    await updateLog(id, editDraft);
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  async function confirmDelete(id: number) {
+    await deleteLog(id);
+    setConfirmDeleteId(null);
+  }
+
+  function startBatchEdit(row: LogEntry) {
+    setEditingId(null);
+    setConfirmDeleteId(null);
+    setEditingBatch(row.batchId);
+    setConfirmDeleteBatch(null);
+    setBatchDraft({ subject: row.subject, minutes: row.minutes });
+  }
+
+  async function saveBatchEdit(batchId: string) {
+    if (!batchDraft) return;
+    await updateLogsBatch(batchId, batchDraft);
+    setEditingBatch(null);
+    setBatchDraft(null);
+  }
+
+  async function confirmBatchDelete(batchId: string) {
+    await deleteLogsBatch(batchId);
+    setConfirmDeleteBatch(null);
+  }
 
   return (
     <div className="max-w-6xl space-y-5">
@@ -54,29 +110,125 @@ export default function HistoryPage() {
               <th className="px-4 py-3">Staff</th>
               <th className="px-4 py-3">Minutes</th>
               <th className="px-4 py-3">Note</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
-              <tr key={r.id} className="border-b border-[var(--card-border)] last:border-0">
-                <td className="px-4 py-2.5 text-[var(--text-muted)]">{r.date}</td>
-                <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium">{r.studentName}</td>
-                <td className="px-4 py-2.5">
-                  {r.grade && (
-                    <span className="text-[10px] font-bold rounded px-1.5 py-0.5"
-                      style={{ background: `color-mix(in srgb, ${GRADE_COLOR[r.grade as keyof typeof GRADE_COLOR]} 20%, transparent)`, color: GRADE_COLOR[r.grade as keyof typeof GRADE_COLOR] }}>
-                      {r.grade}
-                    </span>
+            {rows.map(r => {
+              const groupSize = r.batchId ? batchCounts[r.batchId] || 1 : 1;
+              const isEditing = editingId === r.id;
+              const isBatchEditing = editingBatch === r.batchId && groupSize > 1;
+              return (
+                <Fragment key={r.id}>
+                  <tr className="border-b border-[var(--card-border)] last:border-0 align-top">
+                    <td className="px-4 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{r.date}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.studentName}</td>
+                    <td className="px-4 py-2.5">
+                      {r.grade && (
+                        <span className="text-[10px] font-bold rounded px-1.5 py-0.5"
+                          style={{ background: `color-mix(in srgb, ${GRADE_COLOR[r.grade as keyof typeof GRADE_COLOR]} 20%, transparent)`, color: GRADE_COLOR[r.grade as keyof typeof GRADE_COLOR] }}>
+                          {r.grade}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{SUBJ_LABEL[r.subject]}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-muted)] whitespace-nowrap">{r.staff}</td>
+                    <td className="px-4 py-2.5 text-[var(--text-primary)]">{r.minutes}m</td>
+                    <td className="px-4 py-2.5 text-[var(--text-faint)] max-w-[16rem]">{r.note || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => startEdit(r)} title="Edit this entry"
+                          className="text-[var(--text-muted)] hover:text-[var(--accent-blue)] transition-colors">
+                          <Pencil size={15} />
+                        </button>
+                        {confirmDeleteId === r.id ? (
+                          <span className="flex items-center gap-1">
+                            <button onClick={() => confirmDelete(r.id)} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1">Confirm</button>
+                            <button onClick={() => setConfirmDeleteId(null)} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1">Cancel</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteId(r.id)} title="Delete this entry"
+                            className="text-[var(--text-muted)] hover:text-red-300 transition-colors">
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                        {groupSize > 1 && (
+                          <button onClick={() => startBatchEdit(r)} title={`Edit all ${groupSize} entries logged together`}
+                            className="flex items-center gap-1 text-[10px] rounded-full border border-[var(--card-border)] px-2 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] whitespace-nowrap">
+                            <Users size={11} /> Group of {groupSize}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {isEditing && editDraft && (
+                    <tr className="border-b border-[var(--card-border)] last:border-0" style={{ background: "var(--track)" }}>
+                      <td colSpan={8} className="px-4 py-3">
+                        <div className="flex flex-wrap items-end gap-3">
+                          <MiniField label="Subject">
+                            <select value={editDraft.subject} onChange={e => setEditDraft(d => d && { ...d, subject: e.target.value as Subject })} className="input">
+                              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </MiniField>
+                          <MiniField label="Minutes">
+                            <input type="number" min={0} value={editDraft.minutes}
+                              onChange={e => setEditDraft(d => d && { ...d, minutes: Number(e.target.value) })} className="input w-24" />
+                          </MiniField>
+                          <MiniField label="Date">
+                            <input type="date" value={editDraft.date}
+                              onChange={e => setEditDraft(d => d && { ...d, date: e.target.value })} className="input" />
+                          </MiniField>
+                          <MiniField label="Note">
+                            <input type="text" value={editDraft.note}
+                              onChange={e => setEditDraft(d => d && { ...d, note: e.target.value })} className="input w-56" />
+                          </MiniField>
+                          <button onClick={() => saveEdit(r.id)} className="btn-primary px-4 py-2 text-sm">Save</button>
+                          <button onClick={() => { setEditingId(null); setEditDraft(null); }} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </td>
-                <td className="px-4 py-2.5 text-[var(--text-muted)]">{SUBJ_LABEL[r.subject]}</td>
-                <td className="px-4 py-2.5 text-[var(--text-muted)]">{r.staff}</td>
-                <td className="px-4 py-2.5 text-[var(--text-primary)]">{r.minutes}m</td>
-                <td className="px-4 py-2.5 text-[var(--text-faint)]">{r.note || "—"}</td>
-              </tr>
-            ))}
+
+                  {isBatchEditing && batchDraft && (
+                    <tr className="border-b border-[var(--card-border)] last:border-0" style={{ background: "var(--track)" }}>
+                      <td colSpan={8} className="px-4 py-3">
+                        <p className="text-xs text-[var(--text-muted)] mb-2">
+                          Editing all {groupSize} sessions logged together on {r.date} — changes apply to every student in this group.
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3">
+                          <MiniField label="Subject">
+                            <select value={batchDraft.subject} onChange={e => setBatchDraft(d => d && { ...d, subject: e.target.value as Subject })} className="input">
+                              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </MiniField>
+                          <MiniField label="Minutes">
+                            <input type="number" min={0} value={batchDraft.minutes}
+                              onChange={e => setBatchDraft(d => d && { ...d, minutes: Number(e.target.value) })} className="input w-24" />
+                          </MiniField>
+                          <button onClick={() => saveBatchEdit(r.batchId)} className="btn-primary px-4 py-2 text-sm">Save All {groupSize}</button>
+                          <button onClick={() => { setEditingBatch(null); setBatchDraft(null); }} className="btn-secondary px-4 py-2 text-sm">Cancel</button>
+                          <span className="grow" />
+                          {confirmDeleteBatch === r.batchId ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="text-xs text-amber-300/90">Delete all {groupSize}?</span>
+                              <button onClick={() => confirmBatchDelete(r.batchId)} className="pill-btn bg-red-500/20 text-red-300 text-[11px] px-2 py-1.5">Confirm</button>
+                              <button onClick={() => setConfirmDeleteBatch(null)} className="pill-btn border border-[var(--card-border)] text-[var(--text-muted)] text-[11px] px-2 py-1.5">Cancel</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteBatch(r.batchId)} className="flex items-center gap-1 text-xs text-red-300/80 hover:text-red-300">
+                              <Trash2 size={13} /> Delete whole group
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--text-faint)]">No sessions logged yet.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--text-faint)]">No sessions logged yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -92,6 +244,15 @@ function Select({ label, value, onChange, options }: { label: string; value: str
       <select value={value} onChange={e => onChange(e.target.value)} className="input">
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
+    </div>
+  );
+}
+
+function MiniField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] text-[var(--text-faint)] mb-1">{label}</label>
+      {children}
     </div>
   );
 }

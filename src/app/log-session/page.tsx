@@ -69,15 +69,16 @@ export default function LogSessionPage() {
     setErrors(errs);
     if (errs.length > 0) return;
 
+    const batchId = crypto.randomUUID();
     const present: string[] = [];
     const absent: string[] = [];
     for (const id of selectedIds) {
       const s = students.find(x => x.id === id)!;
       if (absentIds.has(id)) {
-        await addLog(id, subject, staffName, 0, date, `Absent - ${date}`);
+        await addLog(id, subject, staffName, 0, date, `Absent - ${date}`, batchId);
         absent.push(s.name);
       } else {
-        await addLog(id, subject, staffName, minutes, date, note);
+        await addLog(id, subject, staffName, minutes, date, note, batchId);
         present.push(s.name);
       }
     }
