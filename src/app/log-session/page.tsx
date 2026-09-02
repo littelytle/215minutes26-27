@@ -23,6 +23,7 @@ export default function LogSessionPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [recentOpen, setRecentOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const REMEMBER_KEY = "iep-log-session-staff";
 
@@ -62,6 +63,8 @@ export default function LogSessionPage() {
   function selectNone() { setSelectedIds(new Set()); setAbsentIds(new Set()); }
 
   async function handleSubmit() {
+    if (submitting) return;
+
     const errs: string[] = [];
     if (grade === "select") errs.push("Select a grade.");
     if (staffName === "select") errs.push("Select a staff member.");
@@ -69,30 +72,35 @@ export default function LogSessionPage() {
     setErrors(errs);
     if (errs.length > 0) return;
 
-    const batchId = crypto.randomUUID();
-    const present: string[] = [];
-    const absent: string[] = [];
-    for (const id of selectedIds) {
-      const s = students.find(x => x.id === id)!;
-      if (absentIds.has(id)) {
-        await addLog(id, subject, staffName, 0, date, `Absent - ${date}`, batchId);
-        absent.push(s.name);
-      } else {
-        await addLog(id, subject, staffName, minutes, date, note, batchId);
-        present.push(s.name);
+    setSubmitting(true);
+    try {
+      const batchId = crypto.randomUUID();
+      const present: string[] = [];
+      const absent: string[] = [];
+      for (const id of selectedIds) {
+        const s = students.find(x => x.id === id)!;
+        if (absentIds.has(id)) {
+          await addLog(id, subject, staffName, 0, date, `Absent - ${date}`, batchId);
+          absent.push(s.name);
+        } else {
+          await addLog(id, subject, staffName, minutes, date, note, batchId);
+          present.push(s.name);
+        }
       }
+      const parts: string[] = [];
+      if (present.length) parts.push(`Logged ${minutes}m of ${subject} for: ${present.join(", ")}`);
+      if (absent.length) parts.push(`Marked absent: ${absent.join(", ")}`);
+      setMessage(parts.join(" · "));
+      setSelectedIds(new Set());
+      setAbsentIds(new Set());
+      setNote("");
+    } finally {
+      setSubmitting(false);
     }
-    const parts: string[] = [];
-    if (present.length) parts.push(`Logged ${minutes}m of ${subject} for: ${present.join(", ")}`);
-    if (absent.length) parts.push(`Marked absent: ${absent.join(", ")}`);
-    setMessage(parts.join(" · "));
-    setSelectedIds(new Set());
-    setAbsentIds(new Set());
-    setNote("");
   }
 
   const nSel = selectedIds.size;
-  const btnLabel = nSel > 0 ? `Log ${nSel} Student${nSel !== 1 ? "s" : ""} ✓` : "Log Session ✓";
+  const btnLabel = submitting ? "Logging…" : nSel > 0 ? `Log ${nSel} Student${nSel !== 1 ? "s" : ""} ✓` : "Log Session ✓";
 
   return (
     <div className="max-w-5xl space-y-5">
@@ -179,7 +187,7 @@ export default function LogSessionPage() {
         </Card>
       </div>
 
-      <button onClick={handleSubmit} className="btn-primary w-full py-3 text-sm">{btnLabel}</button>
+      <button onClick={handleSubmit} disabled={submitting} className="btn-primary w-full py-3 text-sm disabled:opacity-60">{btnLabel}</button>
 
       <div className="rounded-xl border border-[var(--card-border)]">
         <button onClick={() => setRecentOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-[var(--text-primary)]">
