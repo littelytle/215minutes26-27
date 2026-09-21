@@ -14,7 +14,7 @@ export default function LogSessionPage() {
   const [grade, setGrade] = useState<Grade | "select">("select");
   const [subject, setSubject] = useState<Subject>("Math");
   const [staffName, setStaffName] = useState("select");
-  const [minutes, setMinutes] = useState(30);
+  const [minutesInput, setMinutesInput] = useState("50");
   const [date, setDate] = useState(toISO(new Date()));
   const [note, setNote] = useState("");
 
@@ -87,10 +87,12 @@ export default function LogSessionPage() {
   async function handleSubmit() {
     if (submitting) return;
 
+    const minutes = Number(minutesInput);
     const errs: string[] = [];
     if (grade === "select") errs.push("Select a grade.");
     if (staffName === "select") errs.push("Select a staff member.");
     if (selectedIds.size === 0) errs.push("Select at least one student.");
+    if (!minutesInput.trim() || !Number.isFinite(minutes) || minutes <= 0) errs.push("Enter a number of minutes.");
     setErrors(errs);
     if (errs.length > 0) return;
 
@@ -159,7 +161,7 @@ export default function LogSessionPage() {
               </select>
             </Field>
             <Field label="Minutes">
-              <input type="number" min={1} value={minutes} onChange={e => setMinutes(Number(e.target.value))} className="input" />
+              <input type="number" min={1} value={minutesInput} onChange={e => setMinutesInput(e.target.value)} className="input" />
             </Field>
           </div>
           <Field label="Date">
