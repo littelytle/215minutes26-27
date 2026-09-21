@@ -9,7 +9,7 @@ import Card from "@/components/ui/Card";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 export default function LogSessionPage() {
-  const { staff, students, logs, addLog } = useAppData();
+  const { staff, students, logs, addLogsBatch } = useAppData();
 
   const [grade, setGrade] = useState<Grade | "select">("select");
   const [subject, setSubject] = useState<Subject>("Math");
@@ -101,16 +101,16 @@ export default function LogSessionPage() {
       const batchId = crypto.randomUUID();
       const present: string[] = [];
       const absent: string[] = [];
-      for (const id of selectedIds) {
+      const entries = [...selectedIds].map(id => {
         const s = students.find(x => x.id === id)!;
         if (absentIds.has(id)) {
-          await addLog(id, subject, staffName, 0, date, `Absent - ${date}`, batchId);
           absent.push(s.name);
-        } else {
-          await addLog(id, subject, staffName, minutes, date, note, batchId);
-          present.push(s.name);
+          return { studentId: id, subject, staff: staffName, minutes: 0, date, note: `Absent - ${date}`, batchId };
         }
-      }
+        present.push(s.name);
+        return { studentId: id, subject, staff: staffName, minutes, date, note, batchId };
+      });
+      await addLogsBatch(entries);
       const parts: string[] = [];
       if (present.length) parts.push(`Logged ${minutes}m of ${subject} for: ${present.join(", ")}`);
       if (absent.length) parts.push(`Marked absent: ${absent.join(", ")}`);

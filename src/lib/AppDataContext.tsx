@@ -16,6 +16,7 @@ interface AppData {
   addStaffMember: (name: string, color: string) => Promise<void>;
   updateStaffNames: (names: Record<string, string>) => Promise<void>;
   addLog: (studentId: number, subject: Subject, staff: string, minutes: number, date: string, note: string, batchId: string) => Promise<void>;
+  addLogsBatch: (entries: { studentId: number; subject: Subject; staff: string; minutes: number; date: string; note: string; batchId: string }[]) => Promise<void>;
   updateLog: (id: number, updates: LogUpdate) => Promise<void>;
   deleteLog: (id: number) => Promise<void>;
   updateLogsBatch: (batchId: string, updates: LogUpdate) => Promise<void>;
@@ -102,6 +103,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
+  const addLogsBatch = useCallback(async (
+    entries: { studentId: number; subject: Subject; staff: string; minutes: number; date: string; note: string; batchId: string }[]
+  ) => {
+    await fetch("/api/logs/batch", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries }),
+    });
+    await refresh();
+  }, [refresh]);
+
   const updateLog = useCallback(async (id: number, updates: LogUpdate) => {
     await fetch(`/api/logs/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -132,7 +143,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       staff, students, logs, loading, error, refresh,
       addStudent, updateStudent, deleteStudent, addStaffMember, updateStaffNames,
-      addLog, updateLog, deleteLog, updateLogsBatch, deleteLogsBatch,
+      addLog, addLogsBatch, updateLog, deleteLog, updateLogsBatch, deleteLogsBatch,
     }}>
       {children}
     </Ctx.Provider>

@@ -74,6 +74,14 @@ export async function addLog(
   logs.push({ id: nextId(logs), studentId, subject, staff: staffName, minutes, date: dateISO, note, batchId });
 }
 
+export async function addLogs(
+  entries: { studentId: number; subject: Subject; staff: string; minutes: number; date: string; note: string; batchId: string }[]
+): Promise<void> {
+  for (const e of entries) {
+    logs.push({ id: nextId(logs), studentId: e.studentId, subject: e.subject, staff: e.staff, minutes: e.minutes, date: e.date, note: e.note, batchId: e.batchId });
+  }
+}
+
 export async function updateLog(id: number, updates: LogUpdate): Promise<void> {
   const l = logs.find(x => x.id === id);
   if (!l) return;

@@ -277,12 +277,31 @@ export async function addLog(
   studentId: number, subject: Subject, staffName: string, minutes: number, dateISO: string, note: string,
   batchId: string
 ): Promise<void> {
+  await addLogs([{ studentId, subject, staff: staffName, minutes, date: dateISO, note, batchId }]);
+}
+
+// Writes every entry in one API call instead of one append per row -- used
+// by Log Session, which can submit a whole class roster at once. Doing this
+// per-row (the old addLog loop) meant N students cost N full sheet
+// round-trips in sequence; a group of 5 could take the better part of a
+// minute. This does the same work in one write, however many rows it is.
+export async function addLogs(
+  entries: { studentId: number; subject: Subject; staff: string; minutes: number; date: string; note: string; batchId: string }[]
+): Promise<void> {
+  if (entries.length === 0) return;
   await ensureSheet("logs", LOGS_HEADERS);
   await ensureHeaderColumn("logs", "batch_id");
   const recs = await readRows("logs");
-  await appendRow("logs", LOGS_HEADERS, [
-    nextId(recs), studentId, subject, staffName, minutes, dateISO, note, batchId,
-  ]);
+  let id = nextId(recs);
+  const rows = entries.map(e => [id++, e.studentId, e.subject, e.staff, e.minutes, e.date, e.note, e.batchId]);
+  const sheets = getClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: "logs!A:Z",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: rows },
+  });
 }
 
 const LOG_UPDATE_COL: Record<keyof LogUpdate, string> = {
