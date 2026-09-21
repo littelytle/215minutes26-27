@@ -26,6 +26,7 @@ export default function LogSessionPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const REMEMBER_KEY = "iep-log-session-staff";
+  const selectedKeyFor = (g: string) => `iep-log-session-selected-${g}`;
 
   useEffect(() => {
     const saved = localStorage.getItem(REMEMBER_KEY);
@@ -41,6 +42,27 @@ export default function LogSessionPage() {
     () => (grade === "select" ? [] : students.filter(s => s.grade === grade)),
     [grade, students]
   );
+
+  // Load whichever roster was last checked for this grade (per device), so
+  // staff logging the same recurring class don't have to reselect it daily.
+  useEffect(() => {
+    if (grade === "select") return;
+    const saved = localStorage.getItem(selectedKeyFor(grade));
+    const validIds = new Set(gradeStudents.map(s => s.id));
+    if (saved) {
+      const ids = (JSON.parse(saved) as number[]).filter(id => validIds.has(id));
+      setSelectedIds(new Set(ids));
+    } else {
+      setSelectedIds(new Set());
+    }
+    setAbsentIds(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grade]);
+
+  useEffect(() => {
+    if (grade === "select") return;
+    localStorage.setItem(selectedKeyFor(grade), JSON.stringify([...selectedIds]));
+  }, [grade, selectedIds]);
 
   function toggleStudent(id: number) {
     setSelectedIds(prev => {
@@ -91,7 +113,6 @@ export default function LogSessionPage() {
       if (present.length) parts.push(`Logged ${minutes}m of ${subject} for: ${present.join(", ")}`);
       if (absent.length) parts.push(`Marked absent: ${absent.join(", ")}`);
       setMessage(parts.join(" · "));
-      setSelectedIds(new Set());
       setAbsentIds(new Set());
       setNote("");
     } finally {
@@ -157,10 +178,13 @@ export default function LogSessionPage() {
             <p className="text-sm text-amber-300/80">No students in {grade} yet.</p>
           ) : (
             <>
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-2">
                 <button onClick={selectAll} className="btn-secondary flex-1">Select All</button>
                 <button onClick={selectNone} className="btn-secondary flex-1">Select None</button>
               </div>
+              <p className="text-[10px] text-[var(--text-faint)] mb-3">
+                This roster is remembered on this device — it stays checked after you submit, for the next session with the same group.
+              </p>
               <div className="space-y-2">
                 {gradeStudents.map(s => {
                   const checked = selectedIds.has(s.id);

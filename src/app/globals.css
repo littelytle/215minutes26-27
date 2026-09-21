@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --bg: #0d120b;
   --bg-glow-a: rgba(94, 122, 60, 0.10);
   --bg-glow-b: rgba(90, 140, 160, 0.08);
@@ -78,6 +79,7 @@ body {
   outline: none;
 }
 .input:focus { border-color: var(--accent-green); }
+.input option { background: var(--card); color: var(--text-primary); }
 
 .btn-secondary {
   border-radius: 10px;
